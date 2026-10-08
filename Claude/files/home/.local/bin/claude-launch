@@ -1,0 +1,38 @@
+#!/bin/sh
+# Updates run here rather than in setup.startup so they are guaranteed to finish before the agent starts.
+quiet() { "$@" >/dev/null 2>&1 || true; }
+
+quiet claude plugin marketplace update caveman
+quiet claude plugin update caveman@caveman
+quiet npx -y skills add mattpocock/skills --skill grill-me --skill grilling -g -a claude-code -y
+quiet sh -c 'curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh'
+claude update || true
+
+# The claude kit rewrites settings.json and ~/.claude.json at creation, so re-apply what must live there:
+# - statusLine: caveman's SessionStart hook only looks in settings.json, not --settings files
+# - permissions.defaultMode auto (the kit sets bypassPermissions, which triggers Claude's "make auto mode your default?" offer)
+#   + the flags Claude writes once that offer is accepted
+quiet node -e '
+const fs = require("fs");
+const home = process.env.HOME;
+const merge = (target, values) => {
+  Object.entries(values).forEach(([key, value]) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      target[key] = merge(target[key] && typeof target[key] === "object" ? target[key] : {}, value);
+    } else {
+      target[key] = value;
+    }
+  });
+  return target;
+};
+const patch = (file, values) => {
+  const before = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "{}";
+  const after = JSON.stringify(merge(JSON.parse(before), values), null, 2) + "\n";
+  if (after !== before) fs.writeFileSync(file, after);
+};
+const kit = JSON.parse(fs.readFileSync(home + "/.claude/kit-settings.json", "utf8"));
+patch(home + "/.claude/settings.json", { statusLine: kit.statusLine, permissions: { defaultMode: "auto" } });
+patch(home + "/.claude.json", { hasResetAutoModeOptInForDefaultOffer: true, hasSeenAutoModeEntryWarning: true });
+'
+
+exec claude "$@"

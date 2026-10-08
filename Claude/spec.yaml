@@ -1,0 +1,38 @@
+schemaVersion: "2"
+kind: sandbox
+name: claude-kit
+displayName: Claude (kit)
+description: Claude Code with caveman, plan mode by default, grill-me skill and rtk; tools updated on every start.
+extends: claude
+
+sandbox:
+  entrypoint: ["/home/agent/.local/bin/claude-launch"]
+  command:
+    default: ["--settings", "/home/agent/.claude/kit-settings.json", "--permission-mode", "plan", "--allow-dangerously-skip-permissions"]
+    interactive: ["--settings", "/home/agent/.claude/kit-settings.json", "--permission-mode", "plan", "--allow-dangerously-skip-permissions"]
+
+permissions:
+  network:
+    allow:
+      - downloads.claude.ai
+      - github.com
+      - codeload.github.com
+      - raw.githubusercontent.com
+      - objects.githubusercontent.com
+      - release-assets.githubusercontent.com
+      - registry.npmjs.org
+
+setup:
+  install:
+    - description: Make launcher executable (files/ copy drops the exec bit)
+      user: "1000"
+      command: chmod 0755 /home/agent/.local/bin/claude-launch
+    - description: Install rtk and its Claude Code hook
+      user: "1000"
+      command: curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && ~/.local/bin/rtk init -g --auto-patch
+    - description: Install caveman plugin
+      user: "1000"
+      command: claude plugin marketplace add JuliusBrussee/caveman && claude plugin install caveman@caveman
+    - description: Install grill-me skill and its grilling dependency
+      user: "1000"
+      command: npx -y skills add mattpocock/skills --skill grill-me --skill grilling -g -a claude-code -y

@@ -6,13 +6,14 @@ Personal Docker Sandboxes (`sbx`) kit that starts Claude Code with:
 - `grill-me` + `grilling` skills (mattpocock/skills; `grill-me` only delegates to `grilling`)
 - rtk installed and hooked into Claude Code
 - caveman, skills, rtk and Claude itself updated on every start, before the agent launches
+- session transcripts stored in `<workspace>/.agents/sessions` (symlinked from `~/.claude/projects/<encoded-cwd>`), so they survive `sbx rm`
 
 ## Layout
 ```
 spec.yaml                              # v2 kit, kind: sandbox, extends: claude
 files/home/.claude/kit-settings.json   # our Claude settings, loaded via --settings (incl. git commit/push deny rules)
 files/home/.claude/CLAUDE.md           # global agent rules: no commit/push, hand the commands to the user
-files/home/.local/bin/claude-launch    # entrypoint: updates, then exec claude "$@"
+files/home/.local/bin/claude-launch    # entrypoint: updates, sessions symlink, then exec claude "$@"
 ```
 
 ## Workflow
@@ -36,6 +37,11 @@ files/home/.local/bin/claude-launch    # entrypoint: updates, then exec claude "
 - No commit/push is enforced twice: rules in `CLAUDE.md` (agent gives the commands instead) and `permissions.deny` in `kit-settings.json`, which blocks even in auto/bypass mode. Deny rules match command prefixes, so `git -C dir commit` slips past them; the instructions cover that.
 - `setup.startup` does not gate the entrypoint: anything that must finish before the agent starts goes in the launcher.
 - Network is default-deny: new download domains go in `permissions.network.allow`; find blocked ones with `sbx policy log` on the host.
+- Claude has no setting or env var for the transcripts directory (`CLAUDE_CONFIG_DIR` would move the whole config, including the kit-managed files). The launcher symlinks `~/.claude/projects/<cwd>` to `$PWD/.agents/sessions` instead:
+  - `<cwd>` is the launch directory with every non-alphanumeric char replaced by `-`; Claude truncates and hashes paths over 200 chars, which the launcher does not handle.
+  - A real directory already there (sessions from before) is merged with `cp -an`, then replaced by the symlink.
+  - The auto-memory `memory/` folder lives in the same directory, so it moves to `.agents/sessions/memory` too.
+  - The workspace `.gitignore` is not touched: transcripts can hold secrets, ignore `.agents/sessions` in the workspace if needed.
 - Never put secrets in the kit; use `sbx secret set` or the `credentials` block.
 
 ## Verify after a change
@@ -44,3 +50,4 @@ files/home/.local/bin/claude-launch    # entrypoint: updates, then exec claude "
 - `rtk init -g --show` all `[ok]`, and `~/.claude/CLAUDE.md` holds both our rules and `@RTK.md`
 - asking the agent to commit makes it print the commands instead
 - `claude --version` is the latest
+- `readlink ~/.claude/projects/<encoded-cwd>` points to `<workspace>/.agents/sessions`, and the current session's `.jsonl` is there

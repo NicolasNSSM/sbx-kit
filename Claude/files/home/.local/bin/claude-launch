@@ -35,4 +35,16 @@ patch(home + "/.claude/settings.json", { statusLine: kit.statusLine, permissions
 patch(home + "/.claude.json", { hasResetAutoModeOptInForDefaultOffer: true, hasSeenAutoModeEntryWarning: true });
 '
 
+# Session transcripts live in the workspace so they survive `sbx rm`:
+# ~/.claude/projects/<cwd with non-alphanumerics as "-"> -> $PWD/.agents/sessions
+sessions="$PWD/.agents/sessions"
+link="$HOME/.claude/projects/$(printf '%s' "$PWD" | sed 's/[^A-Za-z0-9]/-/g')"
+mkdir -p "$sessions" "$HOME/.claude/projects"
+if [ -d "$link" ] && [ ! -L "$link" ]; then
+  # 2>/dev/null: recent coreutils warn that -n is non-portable
+  cp -an "$link/." "$sessions/" 2>/dev/null && rm -rf "$link"
+fi
+# Skip if the merge failed: ln into a real directory would drop a stray link inside it
+[ -d "$link" ] && [ ! -L "$link" ] || ln -sfn "$sessions" "$link"
+
 exec claude "$@"
